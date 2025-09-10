@@ -1,0 +1,42 @@
+name: postman-ci
+
+on:
+  push:
+    branches: [ "dev" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  run-postman:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Postman CLI
+        run: |
+          curl -o- "https://dl-cli.pstmn.io/install/linux64.sh" | sh
+
+      - name: Authenticate Postman CLI
+        run: postman login --with-api-key ${{ secrets.POSTMAN_API_KEY }}
+
+      - name: Run collection (UID) with JUnit + HTML reports
+        shell: bash
+        run: |
+          mkdir -p test-results
+          ENV_ARG=""
+          if [ -n "${{ secrets.POSTMAN_ENV_UID }}" ]; then
+            ENV_ARG="-e ${{ secrets.POSTMAN_ENV_UID }}"
+          fi
+          postman collection run "${{ secrets.POSTMAN_COLLECTION_UID }}" \
+            $ENV_ARG \
+            -r cli,junit,html \
+            --reporter-junit-export "test-results/junit.xml" \
+            --reporter-html-export  "test-results/report.html"
+
+      - name: Upload reports (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: postman-reports
+          path: test-results/
